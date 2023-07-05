@@ -1,82 +1,18 @@
 import os
-import sys
 import json, jsonlines
-import evaluate
+
 from transformers import (
     AutoTokenizer, AutoConfig, AutoModel, Trainer, TrainingArguments, HfArgumentParser,
     RobertaModel
 )
 from transformers import TrainerCallback
-from transformers.trainer_utils import get_last_checkpoint
-import math
-from scipy.special import expit
 from collections import defaultdict
 import sys
 sys.path.insert(0, '.')
 from arguments import RunnerArguments, ModelArguments, DatasetArguments
 from transformers.trainer_utils import EvalPrediction
 import numpy as np
-
-def load_data(args):
-    here = os.path.dirname(__file__)
-    file = os.path.join(here, args.dataset_name)
-    train_input, val_input = [], []
-    with jsonlines.open(file) as f:
-        for dat in f:
-            if dat['split'] == 'train':
-                train_input.append(dat)
-            else:
-                val_input.append(dat)
-
-    # order, in case we want to check worst-case memory performance
-    if args.dataset_order is not None:
-        if args.dataset_order == 'longest-first':
-            train_input = sorted(train_input, key=lambda x: -len(x))
-        elif args.dataset_order == 'shortest-first':
-            train_input = sorted(train_input, key=len)
-
-    return train_input[:args.max_train_samples], val_input[:args.max_val_samples]
-
-
-def compute_metrics(eval_preds):
-    def flatten_drop_nans(arr):
-        if isinstance(arr, list):
-            arr = np.vstack(arr)
-        arr = arr.flatten()
-        return arr[arr != -100]
-    metric = evaluate.load("f1")
-    logits, labels = eval_preds
-    logits, labels = flatten_drop_nans(logits), flatten_drop_nans(labels)
-    probas = expit(logits)
-    predictions = (probas > .5).astype(int)
-    return metric.compute(predictions=predictions, references=labels)
-
-
-def get_last_checkpoint_with_asserts(training_args):
-    last_checkpoint = None
-    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
-        last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
-        elif last_checkpoint is not None:
-            print(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
-    return last_checkpoint
-
-
-def model_name_or_checkpoint(last_checkpoint, model_args):
-    if last_checkpoint is not None:
-        checkpoint = last_checkpoint
-    elif model_args.model_name_or_path is not None and os.path.isdir(model_args.model_name_or_path):
-        checkpoint = model_args.model_name_or_path
-    else:
-        checkpoint = None
-    return checkpoint
+from util import compute_metrics, load_data, get_last_checkpoint_with_asserts, model_name_or_checkpoint
 
 
 class EvaluateCallback(TrainerCallback):
@@ -121,7 +57,6 @@ class EvaluateCallback(TrainerCallback):
         output_dir = self._trainer.args.output_dir
         with open(os.path.join(output_dir, f'callback-metrics-state-{state.global_step}.json'), 'w') as f:
             json.dump(metrics_to_dump, f)
-
 
 
 if __name__ == '__main__':
