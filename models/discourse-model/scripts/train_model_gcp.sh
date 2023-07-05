@@ -1,6 +1,6 @@
  python src/trainer.py \
      --model_name_or_path roberta-base \
-     --dataset_name ../data/news-discourse-data.jsonl.gz \
+     --dataset_name data/news-discourse-data.jsonl \
      --do_train \
      --do_eval \
      --output_dir /lfs1/spangher/press-releases/trained-models/news-discourse \

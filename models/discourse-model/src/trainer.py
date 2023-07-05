@@ -89,7 +89,7 @@ if __name__ == '__main__':
     config.context_layer = model_args.context_layer
     config.frozen_layers = model_args.freeze_layers
     config.classification_head = {
-        'num_labels': 1,
+        'num_labels': 9,
         'pooling_method': model_args.pooling_method,
     }
 
