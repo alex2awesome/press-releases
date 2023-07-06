@@ -17,6 +17,7 @@ label_mapper = {
     'Distant_Expectations_Consequences': 6,
     'Distant_Historical': 7,
     'Error': 8,
+    'NA': 8
 }
 
 def _get_attention_mask(x: List[torch.Tensor], max_length_seq: Optional[int]=10000) -> torch.Tensor:

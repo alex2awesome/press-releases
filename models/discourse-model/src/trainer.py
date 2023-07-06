@@ -84,7 +84,11 @@ if __name__ == '__main__':
 
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
     config = AutoConfig.from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
-    hf_model = AutoModel.from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
+    hf_model = (
+        AutoModel
+            .from_pretrained(model_args.model_name_or_path, cache_dir=model_args.cache_dir)
+            .to(device=training_args.device)
+    )
 
     config.context_layer = model_args.context_layer
     config.frozen_layers = model_args.freeze_layers
@@ -119,8 +123,8 @@ if __name__ == '__main__':
 
     # Training
     if training_args.do_train:
-        checkpoint = model_name_or_checkpoint(last_checkpoint, model_args)
-        train_result = trainer.train(resume_from_checkpoint=checkpoint)
+        # checkpoint = model_name_or_checkpoint(last_checkpoint, model_args)
+        train_result = trainer.train()# resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics
@@ -159,5 +163,6 @@ if __name__ == '__main__':
             ])
         with open(os.path.join(training_args.output_dir, 'prediction_output.jsonl'), 'w') as f:
             jsonlines.Writer(f).write_all(prediction_output)
+
 
 

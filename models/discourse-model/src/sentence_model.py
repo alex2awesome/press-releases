@@ -40,7 +40,7 @@ class TokenizedDataset(Dataset):
     def process_one_doc(self, doc):
         doc_tokens = []
         doc_labels = []
-        for sentence, label in zip(doc['sentence'], doc['event_tag']):
+        for sentence, label in zip(doc['sentence'], doc['label']):
             doc_tokens.append(self.tokenizer.encode(sentence))
             if not self.do_score:
                 doc_labels.append(int(label_mapper[label]))
@@ -256,7 +256,10 @@ class SentenceClassificationModel(BertPreTrainedModel):
         # calculate loss
         loss = None
         if labels is not None:
-            loss = self.loss_fct(logits.view(-1, self.num_labels), labels.view(-1, 1))
+            if self.num_labels == 1:
+                loss = self.loss_fct(logits.view(-1, self.num_labels), labels.view(-1, 1))
+            else:
+                loss = self.loss_fct(logits, labels.squeeze().to(int))
         return loss, logits.view(1, -1)
 
     def forward(self, input_ids: List[torch.Tensor], attention_mask: List[torch.Tensor],
