@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="caaecec1-e05c-479d-8811-b568f5f35ce8" name="pluslab">
+        <fileTransfer accessType="SFTP" host="pluslab02.isi.edu" port="22" sshConfigId="390a5d6b-5e6c-48fe-8b7d-bdcab20e89b2" sshConfig="spangher@pluslab02.isi.edu:22 key" keyPair="true">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

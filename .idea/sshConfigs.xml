@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SshConfigs">
+    <configs>
+      <sshConfig host="pluslab02.isi.edu" id="390a5d6b-5e6c-48fe-8b7d-bdcab20e89b2" keyPath="$USER_HOME$/.ssh/id_rsa" port="22" nameFormat="DESCRIPTIVE" username="spangher" useOpenSSHConfig="true" />
+    </configs>
+  </component>
+</project>
