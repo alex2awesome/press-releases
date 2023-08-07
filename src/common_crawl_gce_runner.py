@@ -1,17 +1,20 @@
+##
+# This is the initial step:
+#    Takes in a list of candidate common crawl URLs
+#    Gets the HTML from the common crawl URL.
+#    Does some rudimentary cleaning of the HTML using the newspaper4k library.
+#
+
 import jsonlines
 import requests
 import datetime
 import orjson as json
-import orjsonl
-import time
 from tqdm.auto import tqdm
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor
 from random import choice
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs, urljoin
 import gzip
 import xopen
-from more_itertools import unique_everseen
 import re
 import os
 from bs4 import BeautifulSoup
@@ -50,6 +53,10 @@ def get_json_body(x):
         to_return = re.findall('\{.*?\}', x)[-1]
         to_return = '{' + to_return.split('{')[-1]
         to_return = json.loads(to_return)
+        parts = x.split()
+        date_part = list(filter(lambda x: x.isdigit(), parts))
+        if len(date_part) > 0:
+            to_return['date'] = date_part[0]
     except:
         print(f'error: {x}')
         to_return = {}
@@ -81,13 +88,16 @@ def filter_article_df(article_df, fn):
         Must be in a `.jsonl` format, although can be compressed.
     """
     already_fetched_urls = []
-    with xopen.xopen(filename=fn) as f_handle:
-        for line in f_handle:
-            try:
-                json_obj = json.loads(line)
-                already_fetched_urls.append(json_obj['article_url'])
-            except:
-                continue
+    try:
+        with xopen.xopen(filename=fn) as f_handle:
+            for line in f_handle:
+                try:
+                    json_obj = json.loads(line)
+                    already_fetched_urls.append(json_obj['article_url'])
+                except:
+                    continue
+    except:
+        pass
 
     already_fetched_urls = list(map(clean_url, already_fetched_urls))
     already_fetched_urls = list(map(lambda x: x.split(')')[-1].strip(), already_fetched_urls))
@@ -178,7 +188,7 @@ def post_process(datum, args):
     return datum
 
 
-#  python common_crawl_gce_runner.py --input-file ../data/latimes-article-urls-to-fetch.csv --output-file ../data/latimes-articles-8-years.jsonl --num-concurrent-workers 10 --url-selection-syle round-robin
+#  python common_crawl_gce_runner.py --input-file <i> --output-file <o> --num-concurrent-workers 3 --date-filter 20210101
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
@@ -186,6 +196,7 @@ if __name__ == "__main__":
     parser.add_argument('--output-file', dest='output_file', help="Should be a `.jsonl` file.", type=str)
     parser.add_argument('--num-concurrent-workers', dest='workers', type=int)
     parser.add_argument('--url-filter', default=None, type=str, help='A string to check for in the URL.')
+    parser.add_argument('--date-filter', default=None, type=str, help='Only get articles not in this common crawl date-range.')
     parser.add_argument('--status-filter', nargs='+', default=None, type=int, help='A list of status codes to filter out.')
     parser.add_argument(
         '--already-fetched-file',
@@ -223,6 +234,10 @@ if __name__ == "__main__":
                 if args.status_filter is not None:
                     json_body = get_json_body(line)
                     if int(json_body.get('status', 0)) not in args.status_filter:
+                        continue
+                if args.date_filter is not None:
+                    json_body = get_json_body(line)
+                    if json_body.get('date', '1') < args.date_filter:
                         continue
                 unique_article_lines.append(line)
                 seen.add(url)

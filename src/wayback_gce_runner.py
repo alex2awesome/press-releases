@@ -9,6 +9,8 @@ from random import choice
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qs, urljoin
 import itertools 
 import datetime
+import os
+
 
 ENDPOINT_URLS = [
     'https://wayback-scrape-v2-1-ukvxfz3sya-wl.a.run.app',
@@ -72,14 +74,13 @@ def get_article_for_df(data, parallelize=True, homepage_key_default=None, max_wo
             for output in tqdm(map(simple_gcf_wrapper, data, api_urls_to_hit), total=len(data)):
                 yield output
 
-#  --input-file ../data/latimes-article-urls-to-fetch.csv --output-file ../data/latimes-articles-8-years.jsonl --num-concurrent-workers 10
-
+# run: python wayback_gce_runner.py --input-file <input_file> --output-file <output_file> --num-concurrent-workers 3 --already-fetched-file <already_fetched_file>
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-file', dest='input_file', type=str)
     parser.add_argument('--output-file', dest='output_file', type=str)
-    parser.add_argument('--num-concurrent-workers', dest='workers', type=int)
+    parser.add_argument('--num-concurrent-workers', dest='workers', type=int, default=3)
     parser.add_argument('--already-fetched-file', dest='already_fetched', type=str,
                         help='List of URLs that we already have from prior runs.')
 
@@ -90,13 +91,12 @@ if __name__ == "__main__":
 
     data = (
         article_df
-            .rename(columns={'href': 'article_url', 'key': 'homepage_key'})
+            .rename(columns={'href': 'article_url'})
             .assign(article_url=lambda df: df['article_url'].apply(clean_url))
-            .assign(homepage_key=lambda df: df['homepage_key'].astype(str))
-            .drop_duplicates(['article_url', 'homepage_key'])
+            .drop_duplicates(['article_url'])
     )
 
-    if args.already_fetched is not None:
+    if (args.already_fetched is not None) or os.path.exists(args.output_file):
         print('filtering articles...')
         fn = args.already_fetched
         if fn.endswith('jsonl'):
