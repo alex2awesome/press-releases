@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import re
 import spacy
 import orjson
-import tqdm
+from tqdm.auto import tqdm
 
 def get_num_lines_robust(f):
     num_lines = 0
@@ -96,16 +96,16 @@ def get_spacy_model():
         _spacy_model.add_pipe('sentencizer')
     return _spacy_model
 
-
-def retrieve_ents_for_col(text_col, num_sentences=5):
-    desired_ents = set(['ORG', 'PRODUCT', 'FAC', 'LAW', 'EVENT'])
+DESIRED_ENTS = set(['ORG', 'PRODUCT', 'FAC', 'LAW', 'EVENT'])
+def retrieve_ents_for_col(text_col, num_sentences=5, desired_ents=DESIRED_ENTS, verbose=False):
     text_col = list(map(lambda x: x.replace('\n', ' '), text_col))
-
     # get first n sentences
     sent_pipe = get_spacy_model().pipe(
         text_col,
         disable=["tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer", "textcat", "ner"]
     )
+    if verbose:
+        sent_pipe = tqdm(sent_pipe, total=len(text_col))
     text_col = list(map(lambda x: list(x.sents)[:num_sentences], sent_pipe))
     text_col = list(map(lambda x: ' '.join(list(map(str, x))), text_col))
 
@@ -114,9 +114,12 @@ def retrieve_ents_for_col(text_col, num_sentences=5):
         text_col,
         disable=["tok2vec", "tagger", "parser", "attribute_ruler", "lemmatizer", "textcat", "sentencizer"]
     )
+    if verbose:
+        ner_pipe = tqdm(ner_pipe, total=len(text_col))
     entities = []
     for doc in ner_pipe:
-        ents = list(filter(lambda x: x.label_ in desired_ents, doc.ents))
+        if desired_ents is not None:
+            ents = list(filter(lambda x: x.label_ in desired_ents, doc.ents))
         ents = list(map(str, ents))
         entities.append(ents)
 
@@ -126,7 +129,7 @@ from urllib.parse import urlparse
 from tldextract import tldextract
 domain_exclusions = open('../data/utility-files/domain-exclusions-master-list.txt').read().split('\n')
 domain_exclusions = set(list(filter(lambda x: x != '', domain_exclusions)))
-text_candidates = ['press release', 'news release', 'announce', ]
+text_candidates = ['press release', 'news release', 'announce', 'earnings call']
 href_whitelist_candidates = [
     'prnewswire',
     'businesswire',
@@ -134,6 +137,8 @@ href_whitelist_candidates = [
     'release',
     'globenewswire',
     'news',
+    'earnings',
+    'call-transcript'
 ]
 
 
