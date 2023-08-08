@@ -114,3 +114,8 @@ if __name__ == "__main__":
             if output is not None:
                 output.pop('article_html', None)
                 w.write(output)
+
+
+
+
+python predict.py --model_name_or_path alex2awesome/newsdiscourse-model --model_type sentence --dataset_name ../../../data/open-sourced-articles/all-articlesin-db.csv.gz --outfile ../data/all-articles-in-db-news-discourse.jsonl --tokenizer_name roberta-base --text-col body --id-col article_url

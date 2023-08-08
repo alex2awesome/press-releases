@@ -89,34 +89,29 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--input-file', type=str, default=None)
+    parser.add_argument('--url-column', type=str, default='article_url')
     parser.add_argument('--output-file', type=str, default=None)
     parser.add_argument('--workers', type=int, default=5)
     parser.add_argument('--start-idx', type=float, default=None)
     parser.add_argument('--end-idx', type=float, default=None)
     args = parser.parse_args()
 
-    # if args.output_file is None:
-    #     args.output_file = args.input_file.replace('.csv', '_wayback_timestamps.csv')
-    # df = pd.read_csv(args.input_file)
-    # urls = pd.concat([
-    #     df['target_article_url'].drop_duplicates(),
-    #     df['archival_url'].drop_duplicates()
-    # ])
+    if args.input_file is not None:
+        urls = pd.read_csv(args.input_file)[args.url_column]
+    else:
+        a_maps = glob.glob('article-map*')
+        a_maps = list(filter(lambda x: 'wayback' not in x, a_maps))
+        all_urls = []
+        print('reading input files...')
+        for f in tqdm(a_maps):
+            df = pd.read_csv(f)
+            urls = pd.concat([
+                df['target_article_url'].drop_duplicates(),
+                df['archival_url'].drop_duplicates()
+            ])
+            all_urls.append(urls)
+        urls = pd.concat(all_urls).drop_duplicates()
 
-
-    a_maps = glob.glob('article-map*')
-    a_maps = list(filter(lambda x: 'wayback' not in x, a_maps))
-    all_urls = []
-    print('reading input files...')
-    for f in tqdm(a_maps):
-        df = pd.read_csv(f)
-        urls = pd.concat([
-            df['target_article_url'].drop_duplicates(),
-            df['archival_url'].drop_duplicates()
-        ])
-        all_urls.append(urls)
-
-    urls = pd.concat(all_urls).drop_duplicates()
     urls = (
         urls
             .apply(lambda x: x.split(')'))
