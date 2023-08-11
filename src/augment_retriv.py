@@ -1,5 +1,5 @@
 from retriv import SparseRetriever
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Iterable
 import numba as nb
 import numpy.typing as npt
 import numpy as np
@@ -59,7 +59,16 @@ def bm25(
 class MySparseRetriever(SparseRetriever):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.id_mapping_reverse = {v:k for k, v in self.id_mapping.items()}
+        self.id_mapping_reverse = None
+
+    def index(
+        self,
+        collection: Iterable,
+        callback: callable = None,
+        show_progress: bool = True,
+    ):
+        super().index(collection=collection, callback=callback, show_progress=show_progress)
+        self.id_mapping_reverse = {v: k for k, v in self.id_mapping.items()}
 
     def get_doc_ids_and_term_freqs_filter(self,
                                           query_terms: List[str],
