@@ -15,50 +15,6 @@ import numpy as np
 from util import compute_metrics, load_data, get_last_checkpoint_with_asserts, model_name_or_checkpoint
 
 
-class EvaluateCallback(TrainerCallback):
-
-    def __init__(self, trainer, eval_dataset) -> None:
-        """
-        Run an evaluation loop on multiple datasets.
-
-        * `eval_datasets` is a list of tuples where each item is:
-            (`dataset prefix`, dataset)
-        """
-        super().__init__()
-        self._trainer = trainer
-        self.eval_dataset = eval_dataset
-
-    def on_evaluate(self, args, state, control, **kwargs):
-        # if control.should_evaluate:
-        metrics_to_dump = {}
-        all_labels = defaultdict(list)
-        all_logits = defaultdict(list)
-
-        dataloader = self._trainer.get_eval_dataloader(self.eval_dataset)
-        for step, inputs in enumerate(dataloader):
-            loss, logits, labels = self._trainer.prediction_step(self._trainer.model, inputs, prediction_loss_only=False)
-            logits = logits.squeeze().cpu().detach().numpy().tolist()
-            labels = labels[0].squeeze().cpu().detach().numpy().tolist()
-            categories = self.eval_dataset[step]['categories']
-            for sent_idx, (logit, label, cat) in enumerate(zip(logits, labels, categories)):
-                all_labels[cat].append(label)
-                all_logits[cat].append(logit)
-                all_labels['full'].append(label)
-                all_logits['full'].append(logit)
-
-        for cat in all_labels.keys():
-            labels = np.array(all_labels[cat])
-            logits = np.array(all_logits[cat])
-            metrics = compute_metrics(EvalPrediction(logits, labels))
-            for k, m in metrics.items():
-                metrics_to_dump[cat + '_' + k] = m
-
-        print(json.dumps(metrics_to_dump))
-        output_dir = self._trainer.args.output_dir
-        with open(os.path.join(output_dir, f'callback-metrics-state-{state.global_step}.json'), 'w') as f:
-            json.dump(metrics_to_dump, f)
-
-
 if __name__ == '__main__':
     parser = HfArgumentParser((RunnerArguments, ModelArguments, DatasetArguments, TrainingArguments,))
     runner_args, model_args, data_args, training_args = parser.parse_args_into_dataclasses()
@@ -91,6 +47,13 @@ if __name__ == '__main__':
     )
 
     config.context_layer = model_args.context_layer
+    if config.context_layer == 'transformer':
+        context_config = AutoConfig.from_pretrained(model_args.model_name_or_path)
+        context_config.num_attention_heads = 2
+        context_config.num_hidden_layers = 2
+        context_config.max_position_embeddings = 120
+        config.context_config = context_config.to_dict()
+
     config.frozen_layers = model_args.freeze_layers
     config.classification_head = {
         'num_labels': 9,
@@ -116,15 +79,15 @@ if __name__ == '__main__':
         compute_metrics=compute_metrics,
         data_collator=collate_fn,  # for datacollator with padding
     )
-    trainer.add_callback(EvaluateCallback(trainer, eval_dataset=eval_dataset))
+    # trainer.add_callback(EvaluateCallback(trainer, eval_dataset=eval_dataset))
 
     # Detecting last checkpoint.
     last_checkpoint = get_last_checkpoint_with_asserts(training_args)
 
     # Training
     if training_args.do_train:
-        # checkpoint = model_name_or_checkpoint(last_checkpoint, model_args)
-        train_result = trainer.train()# resume_from_checkpoint=checkpoint)
+        checkpoint = model_name_or_checkpoint(last_checkpoint, model_args)
+        train_result = trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()  # Saves the tokenizer too for easy upload
 
         metrics = train_result.metrics

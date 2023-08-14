@@ -2,7 +2,10 @@ import torch.nn as nn
 from typing import Optional, List, Dict, Union, Any
 
 from torch.utils.data import Dataset
-from transformers import AutoModel, AutoConfig, RobertaConfig, RobertaModel, PreTrainedModel, BertPreTrainedModel
+from transformers import (
+    AutoModel, AutoConfig, RobertaConfig, RobertaModel, PreTrainedModel, BertPreTrainedModel,
+    PretrainedConfig
+)
 
 import torch
 from torch.nn import BCEWithLogitsLoss
@@ -10,8 +13,9 @@ from torch.nn import CrossEntropyLoss
 from torch.nn.utils.rnn import pad_sequence
 from util import _get_attention_mask, label_mapper
 
+
 class TokenizedDataset(Dataset):
-    def __init__(self, doc_list=None, tokenizer=None, do_score=False, max_length=4096):
+    def __init__(self, doc_list=None, tokenizer=None, do_score=False, max_length=512, label_mapper=label_mapper):
         """
         Processes a dataset, `doc_list` for either training/evaluation or scoring.
         * doc_list: We expect a list of dictionaries.
@@ -26,8 +30,12 @@ class TokenizedDataset(Dataset):
         self.categories = []
         self.do_score = do_score  # whether to just score data (i.e. no labels exist)
         self.max_length = max_length
-        if not self.do_score:
+        if not do_score:
             self.process_data(doc_list)
+        self.label_mapper = label_mapper
+        if self.label_mapper is not None:
+            self.idx2label_mapper = {v: k for k, v in self.label_mapper.items()}
+            self.num_labels = max(self.label_mapper.values()) + 1
 
     def process_data(self, doc_list):
         for doc in doc_list:
@@ -37,29 +45,35 @@ class TokenizedDataset(Dataset):
                 self.attention.append(attention_mask)
                 self.labels.append(doc_labels)
 
+    def transform_logits_to_labels(self, logits, num_docs):
+        preds = logits.reshape(num_docs, self.num_labels).argmax(dim=1)
+        preds = preds.detach().cpu().numpy()
+        return list(map(self.idx2label_mapper.get, preds))
+
     def process_one_doc(self, doc):
         doc_tokens = []
         doc_labels = []
-        for sentence, label in zip(doc['sentence'], doc['label']):
-            doc_tokens.append(self.tokenizer.encode(sentence))
-            if not self.do_score:
-                doc_labels.append(int(label_mapper[label]))
-
-        num_doc_toks = sum(map(len, doc_tokens))
-        if num_doc_toks <= self.max_length:
-            doc_tokens = list(map(torch.tensor, doc_tokens))
-            attention_mask = _get_attention_mask(doc_tokens)
-            input_ids = pad_sequence(doc_tokens, batch_first=True)
-
-            if not self.do_score:
-                # we need have the labels like this for this weird `nested_concat` function
-                # in the `evaluation_loop` of the `Trainer.py`.
-                doc_labels = torch.tensor(doc_labels).unsqueeze(0).to(float)
-            else:
-                doc_labels = None
-            return input_ids, attention_mask, doc_labels
+        if self.do_score:
+            for sentence in doc['sentences']:
+                doc_tokens.append(self.tokenizer.encode(sentence))
         else:
-            return None, None, None
+            for sentence, label in zip(doc['sent'], doc['quote_type']):
+                doc_tokens.append(self.tokenizer.encode(sentence))
+                doc_labels.append(int(self.label_mapper[label]))
+        doc_tokens = list(map(torch.tensor, doc_tokens))
+        attention_mask = _get_attention_mask(doc_tokens)[:, :self.max_length]
+        input_ids = pad_sequence(
+            doc_tokens,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id
+        )[:, :self.max_length]
+        if not self.do_score:
+            # we need have the labels like this for this weird `nested_concat` function
+            # in the `evaluation_loop` of the `Trainer.py`.
+            doc_labels = torch.tensor(doc_labels).unsqueeze(0).to(float)
+        else:
+            doc_labels = None
+        return input_ids, attention_mask, doc_labels
 
     def __len__(self):
         return len(self.input_ids)
@@ -144,12 +158,10 @@ class AttentionCompression(nn.Module):
 
 
 class TransformerContext(nn.Module):
-    def __init__(self, config, num_sent_attn_heads=2, num_contextual_layers=2, max_num_sentences=100):
+    def __init__(self, config):
         super().__init__()
-        # load transformer
-        config.num_attention_heads = num_sent_attn_heads
-        config.num_hidden_layers = num_contextual_layers
-        config.max_position_embeddings = max_num_sentences + 20
+        if isinstance(config, dict):
+            config = RobertaConfig(**config)
 
         self.base_model = AutoModel.from_config(config)
         TransformerContext.base_model_prefix = self.base_model.base_model_prefix
@@ -200,7 +212,11 @@ def freeze_hf_model(model, freeze_layers):
             freeze_all_params(layers[layer])
 
 
-class SentenceClassificationModel(BertPreTrainedModel):
+class SentenceClassificationModel(PreTrainedModel):
+
+    base_model_prefix = ''
+    config_class = AutoConfig
+
     def __init__(self, config, hf_model=None):
         super().__init__(config)
 
@@ -216,9 +232,9 @@ class SentenceClassificationModel(BertPreTrainedModel):
         self.pooling_method = config.classification_head['pooling_method']
         self.word_attention = AttentionCompression(hidden_size=config.hidden_size, dropout=config.hidden_dropout_prob)
         if getattr(config, 'context_layer', None) == 'transformer':
-            self.context_layer = TransformerContext(config)
-        else:
-            self.context_layer = None
+            self.context_layer = TransformerContext(config.context_config)
+        elif getattr(config, 'context_layer', None) == 'bilstm':
+            self.context_layer = BiLSTMContext(config)
         self.post_init()
 
     def post_init(self):
@@ -260,6 +276,9 @@ class SentenceClassificationModel(BertPreTrainedModel):
                 loss = self.loss_fct(logits.view(-1, self.num_labels), labels.view(-1, 1))
             else:
                 loss = self.loss_fct(logits, labels.squeeze().to(int))
+
+        # note that this unstacks the logits such that they are a long 1-d array that
+        # we have to reshape. This is on purpose, for the HF's EvalPrediction function...
         return loss, logits.view(1, -1)
 
     def forward(self, input_ids: List[torch.Tensor], attention_mask: List[torch.Tensor],

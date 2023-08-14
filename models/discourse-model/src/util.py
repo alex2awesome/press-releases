@@ -65,18 +65,29 @@ def load_data(args):
     return train_input[:args.max_train_samples], val_input[:args.max_val_samples]
 
 
+import numpy as np
+from scipy.special import expit
+
 def compute_metrics(eval_preds):
-    def flatten_drop_nans(arr):
-        if isinstance(arr, list):
-            arr = np.vstack(arr)
-        arr = arr.flatten()
-        return arr[arr != -100]
     metric = evaluate.load("f1")
     logits, labels = eval_preds
-    logits, labels = flatten_drop_nans(logits), flatten_drop_nans(labels)
-    probas = expit(logits)
-    predictions = (probas > .5).astype(int)
-    return metric.compute(predictions=predictions, references=labels)
+    if isinstance(logits, list):
+        logits = np.vstack(logits)
+    if isinstance(labels, list):
+        labels = np.vstack(labels)
+
+    all_preds, all_labels = [], []
+    for logit_i, label_i in zip(logits, labels):
+        logit_i = logit_i[logit_i != -100]
+        label_i = label_i[label_i != -100]
+        logit_i = logit_i.reshape(len(label_i), 9)
+        pred_i = logit_i.argmax(axis=1)
+        all_preds.append(pred_i)
+        all_labels.append(label_i.astype(int))
+
+    all_preds, all_labels = np.hstack(all_preds), np.hstack(all_labels)
+
+    return metric.compute(predictions=all_preds, references=all_labels, average='macro')
 
 
 def get_last_checkpoint_with_asserts(training_args):
