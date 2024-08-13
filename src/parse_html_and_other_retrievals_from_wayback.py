@@ -12,7 +12,7 @@ import orjson
 from tqdm.auto import tqdm
 import gzip
 from itertools import islice
-from utils import get_num_lines_robust, extract_links_with_char_num_and_post_process, retrieve_ents_for_col, find_press_release
+from utils import get_num_lines_robust, extract_links_from_html_with_char_num_and_post_process, retrieve_ents_for_col, find_press_release
 
 num_lines_cache = {
     'wsj-articles.jsonl.gz': 217200,
@@ -71,8 +71,8 @@ if __name__ == '__main__':
     print(f'num existing lines: {len(existing_urls)}')
     with (
         xopen.xopen(args.input_file) as f_in,
-        gzip.open(args.all_articles_output_file, 'ab') as f_all_articles_out,
-        gzip.open(args.target_links_output_file, 'ab') as f_target_links_out
+        xopen.xopen(args.all_articles_output_file, 'a') as f_all_articles_out,
+        xopen.xopen(args.target_links_output_file, 'a') as f_target_links_out
     ):
         curr_file_idx = 0
         total = int(num_lines / args.batch_size)
@@ -97,7 +97,7 @@ if __name__ == '__main__':
                 if datum['article_url'] in existing_urls:
                     continue
 
-                datum = extract_links_with_char_num_and_post_process(datum)
+                datum = extract_links_from_html_with_char_num_and_post_process(datum)
                 batch.append(datum)
 
             # read next line
@@ -119,10 +119,10 @@ if __name__ == '__main__':
                     target_links.append(datum)
 
             # write to disk
-            datum_strs = list(map(orjson.dumps, batch))
-            f_all_articles_out.write(b'\n'.join(datum_strs) + b'\n')
+            datum_strs = list(map(lambda x: orjson.dumps(x).decode(), batch))
+            f_all_articles_out.write('\n'.join(datum_strs) + '\n')
 
-            link_strs = list(map(orjson.dumps, target_links))
-            f_target_links_out.write(b'\n'.join(link_strs) + b'\n')
+            link_strs = list(map(lambda x: orjson.dumps(x).decode(), target_links))
+            f_target_links_out.write('\n'.join(link_strs) + '\n')
 
             curr_file_idx += args.batch_size

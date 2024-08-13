@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="run-factual-consistency-eval-open-source-bartscore" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="run-factual-consistency-eval" type="PythonConfigurationType" factoryName="Python">
     <module name="press-release-exploration" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
@@ -7,14 +7,13 @@
       <env name="PYTHONUNBUFFERED" value="1" />
       <env name="CUDA_VISIBLE_DEVICES" value="1" />
     </envs>
-    <option name="SDK_HOME" value="/nas/home/spangher/.virtualenvs/press-release-exploration/bin/python" />
-    <option name="SDK_NAME" value="Remote Python 3.9.6 (sftp://spangher@pluslab02.isi.edu:22/nas/home/spangher/.virtualenvs/press-release-exploration/bin/python) (2)" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/models/factual-consistency" />
-    <option name="IS_MODULE_SDK" value="false" />
+    <option name="SDK_HOME" value="" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+    <option name="IS_MODULE_SDK" value="true" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
-    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/factual-consistency/anli-scoring.py" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/assess_factual_consistency.py" />
     <option name="PARAMETERS" value="--article-dataset ../../data/open-sourced-articles/nytimes-articles-for-factual-verification.jsonl.gz --outfile nytimes-entailment-data.jsonl.gz --doc-id-col doc_id --date-col date --key-match-col ents --batch-size 20 --factual_consistency_model_name_or_path bartscore" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
